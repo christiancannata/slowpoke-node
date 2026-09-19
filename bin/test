@@ -1,0 +1,31 @@
+#!/bin/sh
+# Runs the test suite in Docker, nothing installed on the host.
+#   ./bin/test              Node 22
+#   ./bin/test 18           another Node version
+#   ./bin/test 22 --test-name-pattern origin      extra arguments go to node --test
+# One node_modules per Node version, in a Docker volume: runs do not reinstall each other's
+# dependencies, and the frameworks live in node_modules as they do in production (the origin
+# finder must see them as third-party code).
+set -eu
+cd "$(dirname "$0")/.."
+node="${1:-22}"; shift || true
+tag="slowpoke-node-test:$node"
+docker image inspect "$tag" >/dev/null 2>&1 || docker build -q --build-arg NODE="$node" -t "$tag" docker >/dev/null
+# Inside the Slowpoke repository the shared fixtures in spec/ are mounted too; the standalone
+# package repository runs the same tests without them (the fixture test is then skipped).
+spec=""
+[ -d ../../spec ] && spec="-v $(cd ../../spec && pwd):/repo/spec"
+exec docker run --rm --cpus 1 \
+  -v "$(pwd)":/repo/packages/node $spec -v "slowpoke-node-modules-$node":/modules -v slowpoke-npm-cache:/root/.npm \
+  -e UPDATE_FIXTURES="${UPDATE_FIXTURES:-}" -e NODE_PATH=/modules/node_modules \
+  "$tag" sh -c '
+    set -e
+    if ! cmp -s package.json /modules/package.json; then
+      cp package.json /modules/package.json
+      (cd /modules && npm install --no-audit --no-fund --loglevel=error --only=dev >/dev/null)
+    fi
+    node --version
+    # No arguments: the whole suite. With arguments: exactly what was asked (a file, a pattern).
+    if [ $# -eq 0 ]; then exec node --test test/*.test.js; fi
+    case "$1" in -*) exec node --test "$@" test/*.test.js ;; *) exec node --test "$@" ;; esac
+  ' sh "$@"

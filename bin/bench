@@ -1,0 +1,52 @@
+#!/bin/sh
+# What the package costs a request, measured instead of claimed.
+#   ./bin/bench          Node 18 and 22
+#   ./bin/bench 24       one version
+#
+# It times everything the package does while a request is running: timing each query, finding the
+# line of application code behind it, and building the trace. What is left - encoding the payload
+# and the HTTP call - happens after the response has been sent (see the README).
+set -eu
+cd "$(dirname "$0")/.."
+
+for node in ${*:-18 22}; do
+	docker run --rm -v "$(pwd)":/pkg -w /pkg "node:$node-alpine" node -e '
+const { OriginFinder } = require("/pkg/src/origin");
+const { Tracer } = require("/pkg/src/tracer");
+
+const tracer = new Tracer({
+  origin: new OriginFinder("/pkg", 60),
+  submit: () => {},
+  service: "app",
+});
+
+// A stack as deep as a route calling a service calling the query builder.
+const deep = (n, f) => (n === 0 ? f() : deep(n - 1, f));
+const sql = "SELECT orders.id, orders.total FROM orders WHERE orders.customer_id = $1 ORDER BY orders.created_at DESC LIMIT 25";
+const runs = 3000, queries = 50;
+
+// Two shapes, because one stack is read per distinct statement: the repeats of an N+1 are
+// almost free, fifty different statements are the worst a request can do.
+function measure(distinct) {
+  let best = Infinity;
+  for (let round = 0; round < 3; round++) {
+    const started = process.hrtime.bigint();
+    for (let i = 0; i < runs; i++) {
+      const trace = tracer.startRequest("GET");
+      tracer.run(trace, () => {
+        for (let q = 0; q < queries; q++) {
+          deep(10, () => tracer.recordQuery(distinct ? sql + " -- " + q : sql, 0.0015, "postgresql"));
+        }
+        tracer.finishRequest(trace, "/orders/:id", "/orders/7", 200);
+      });
+    }
+    best = Math.min(best, Number(process.hrtime.bigint() - started) / 1e6 / runs);
+  }
+  return best;
+}
+const repeated = measure(false);
+const distinct = measure(true);
+console.log(`Node ${process.versions.node.padEnd(8)} ${repeated.toFixed(2)} ms with ${queries} times the same statement (an N+1), `
+  + `${distinct.toFixed(2)} ms with ${queries} different ones - ${(repeated * 1000 / queries).toFixed(1)} to ${(distinct * 1000 / queries).toFixed(1)} microseconds per query`);
+'
+done
