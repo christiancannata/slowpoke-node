@@ -1,15 +1,15 @@
-<h1 align="center">@slowpoke/node</h1>
+<h1 align="center">@slowpokedev/node</h1>
 
 <p align="center"><b>Which line of your code is slow. Not which query — which line.</b></p>
 
 <p align="center">
 <a href="https://github.com/christiancannata/slowpoke-node/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/christiancannata/slowpoke-node/actions/workflows/tests.yml/badge.svg"></a>
-<a href="https://www.npmjs.com/package/@slowpoke/node"><img alt="npm" src="https://img.shields.io/npm/v/@slowpoke/node"></a>
-<a href="https://www.npmjs.com/package/@slowpoke/node"><img alt="node" src="https://img.shields.io/node/v/@slowpoke/node"></a>
+<a href="https://www.npmjs.com/package/@slowpokedev/node"><img alt="npm" src="https://img.shields.io/npm/v/@slowpokedev/node"></a>
+<a href="https://www.npmjs.com/package/@slowpokedev/node"><img alt="node" src="https://img.shields.io/node/v/@slowpokedev/node"></a>
 <a href="https://github.com/christiancannata/slowpoke-node/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/christiancannata/slowpoke-node/actions/workflows/codeql.yml/badge.svg"></a>
 <a href="#performance"><img alt="runtime dependencies: 0" src="https://img.shields.io/badge/runtime%20dependencies-0-brightgreen"></a>
 <a href="https://scorecard.dev/viewer/?uri=github.com/christiancannata/slowpoke-node"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/christiancannata/slowpoke-node/badge"></a>
-<a href="LICENSE"><img alt="MIT" src="https://img.shields.io/npm/l/@slowpoke/node"></a>
+<a href="LICENSE"><img alt="MIT" src="https://img.shields.io/npm/l/@slowpokedev/node"></a>
 </p>
 
 ---
@@ -41,7 +41,7 @@ get slower.
 ## Install
 
 ```sh
-npm install @slowpoke/node
+npm install @slowpokedev/node
 ```
 
 No SDK, no native module, no key to carry, no account anywhere. The package talks to the Slowpoke agent
@@ -55,7 +55,7 @@ sources:
 ### Express
 
 ```js
-const slowpoke = require('@slowpoke/node');
+const slowpoke = require('@slowpokedev/node');
 
 slowpoke.pg.instrument();          // or slowpoke.mysql2.instrument()
 app.use(slowpoke.express());       // first, so the timing covers the other middleware
@@ -64,7 +64,7 @@ app.use(slowpoke.express());       // first, so the timing covers the other midd
 ### Fastify
 
 ```js
-const slowpoke = require('@slowpoke/node');
+const slowpoke = require('@slowpokedev/node');
 
 slowpoke.pg.instrument();
 await app.register(slowpoke.fastify);

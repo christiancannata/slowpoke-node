@@ -6,7 +6,7 @@ const { storage } = require('./tracer');
 /**
  * One trace per request:
  *
- *     await app.register(require('@slowpoke/node').fastify)
+ *     await app.register(require('@slowpokedev/node').fastify)
  *
  * enterWith, not run: Fastify's hooks are a chain of their own, and the trace has to follow the
  * handler that runs after this hook returns.

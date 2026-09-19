@@ -1,11 +1,14 @@
-import assert from 'node:assert'
-import { execFileSync } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
-import { test } from 'node:test'
-import { fileURLToPath } from 'node:url'
+'use strict'
 
-const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+// CommonJS like the rest of the package: on Node 18 an import statement in here is a syntax error,
+// which is exactly the sort of thing this file exists to catch.
+const assert = require('node:assert')
+const { execFileSync } = require('node:child_process')
+const fs = require('node:fs')
+const path = require('node:path')
+const { test } = require('node:test')
+
+const root = path.dirname(__dirname)
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 
 // This package runs inside other people's applications. Weight is a promise, so it is a test: the

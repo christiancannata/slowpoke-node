@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 - 2026-09-19
+
+- The name on npm is **@slowpokedev/node**: the scope belongs to the slowpokedev organisation, and
+  everything published for Node will live under it. Nothing changes in the code.
+- Weight is a test now: no dependency of any kind, a published copy that is source and documentation
+  only - checked file by file with a wall at 120 kB - and a wall on the size of `src/`.
+
 ## 0.1.0 - 2026-09-18
 
 First release.

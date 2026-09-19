@@ -5,7 +5,7 @@ const slowpoke = require('./index');
 /**
  * One trace per request:
  *
- *     app.use(require('@slowpoke/node').express())   // first, so the timing covers the others
+ *     app.use(require('@slowpokedev/node').express())   // first, so the timing covers the others
  *
  * The route template (/orders/:id) is read when the response is done, because that is when Express
  * knows which route matched.

@@ -8,8 +8,8 @@ const patched = new WeakSet();
  * Times every statement node-postgres runs, whoever asked for it: an ORM on top (TypeORM, Sequelize,
  * Knex, Drizzle) goes through the same client.
  *
- *     require('@slowpoke/node').pg.instrument()          // the pg in node_modules
- *     require('@slowpoke/node').pg.instrument(myPg)      // or the module you already required
+ *     require('@slowpokedev/node').pg.instrument()          // the pg in node_modules
+ *     require('@slowpokedev/node').pg.instrument(myPg)      // or the module you already required
  *
  * Idempotent: a statement is never recorded twice.
  */

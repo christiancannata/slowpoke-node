@@ -8,7 +8,7 @@ const patched = new WeakSet();
  * Times every statement mysql2 runs, query() and execute(), callbacks and promises alike: the
  * promise wrapper and the pools go through the same connection underneath, and so do the ORMs.
  *
- *     require('@slowpoke/node').mysql2.instrument()
+ *     require('@slowpokedev/node').mysql2.instrument()
  *
  * Idempotent: a statement is never recorded twice.
  */

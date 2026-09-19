@@ -1,10 +1,21 @@
 {
-  "name": "@slowpoke/node",
-  "version": "0.1.0",
+  "name": "@slowpokedev/node",
+  "version": "0.1.1",
   "description": "Tells Slowpoke which line of your Node app ran each query: Express, Fastify, pg, mysql2, BullMQ",
-  "keywords": ["express", "fastify", "postgres", "mysql", "performance", "n-plus-one", "slowpoke"],
+  "keywords": [
+    "express",
+    "fastify",
+    "postgres",
+    "mysql",
+    "performance",
+    "n-plus-one",
+    "slowpoke"
+  ],
   "homepage": "https://github.com/christiancannata/slowpoke-node",
-  "repository": { "type": "git", "url": "git+https://github.com/christiancannata/slowpoke-node.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/christiancannata/slowpoke-node.git"
+  },
   "bugs": "https://github.com/christiancannata/slowpoke-node/issues",
   "author": "Christian Cannata <christiancannata@gmail.com>",
   "license": "MIT",
@@ -18,8 +29,16 @@
     "./bullmq": "./src/bullmq.js",
     "./package.json": "./package.json"
   },
-  "files": ["src", "README.md", "LICENSE", "SECURITY.md", "CHANGELOG.md"],
-  "engines": { "node": ">=18" },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {},
   "devDependencies": {
     "express": "^4.21.2",
