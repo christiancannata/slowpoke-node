@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 - 2026-09-19
+
+- Releases come from GitHub Actions through OpenID Connect: no token in a secret, none on a laptop,
+  and npm records which workflow of which repository built each version, with a provenance
+  attestation attached.
+- A tag does not publish: it **stages**. The version waits on npmjs.com until a person approves it,
+  which is the right gate for something that runs inside other people's applications.
+
 ## 0.1.1 - 2026-09-19
 
 - The name on npm is **@slowpokedev/node**: the scope belongs to the slowpokedev organisation, and

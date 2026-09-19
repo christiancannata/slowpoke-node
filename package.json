@@ -1,6 +1,6 @@
 {
   "name": "@slowpokedev/node",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Tells Slowpoke which line of your Node app ran each query: Express, Fastify, pg, mysql2, BullMQ",
   "keywords": [
     "express",

@@ -1,8 +1,11 @@
 name: publish
 
-# On a version tag: publish to npm as this repository, through OpenID Connect, with a provenance
-# attestation. There is no token anywhere - not in a secret, not on a laptop - and npm shows which
-# workflow of which repository published the version.
+# On a version tag: hand the version to npm as this repository, through OpenID Connect, with a
+# provenance attestation. There is no token anywhere - not in a secret, not on a laptop.
+#
+# It stages, it does not publish: the version waits under Staged Packages on npmjs.com until a
+# person approves it. A tag alone never reaches anybody's node_modules, which is the point for a
+# package that runs inside other people's applications.
 on:
   push:
     tags: ["v*"]
@@ -23,11 +26,12 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
-          node-version: "22"
+          # npm 11.5.1 or newer for OpenID Connect and for "npm stage"; Node 24 ships it.
+          node-version: "24"
           registry-url: https://registry.npmjs.org
       - name: The suite, before anything leaves
         run: |
           npm install --no-audit --no-fund
           node --test test/*.test.js
-      - name: Publish
-        run: npm publish --access public --provenance
+      - name: Stage the version for approval
+        run: npm stage publish --access public --provenance

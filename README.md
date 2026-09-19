@@ -160,7 +160,8 @@ Prisma talks to its own engine rather than to a driver, so it is not covered yet
 | **46 tests** | unit tests, and integration tests on real Express and Fastify applications, on Node 18 to 24 |
 | **Same wire, both sides** | `spec/node_otlp_fixtures.json` in the Slowpoke repository holds payloads exactly as this package sends them, with what the agent must read from each. The agent's Go tests replay that file: a change here the agent cannot read fails there |
 | **`npm audit`** and **CodeQL** | in CI, on every push, on the code and on the workflows, which are pinned by commit |
-| **Signed provenance** | every release archive carries a Sigstore attestation |
+| **Signed provenance** | every release archive carries a Sigstore attestation, and npm records which workflow built each version |
+| **No token anywhere** | releases are published by GitHub Actions through OpenID Connect, and a tag only *stages* the version: it reaches npm when a person approves it |
 
 ```sh
 ./bin/test 22                                    # the suite on Node 22
