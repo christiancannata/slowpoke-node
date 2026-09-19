@@ -6,6 +6,8 @@
 <a href="https://github.com/christiancannata/slowpoke-node/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/christiancannata/slowpoke-node/actions/workflows/tests.yml/badge.svg"></a>
 <a href="https://www.npmjs.com/package/@slowpoke/node"><img alt="npm" src="https://img.shields.io/npm/v/@slowpoke/node"></a>
 <a href="https://www.npmjs.com/package/@slowpoke/node"><img alt="node" src="https://img.shields.io/node/v/@slowpoke/node"></a>
+<a href="https://github.com/christiancannata/slowpoke-node/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/christiancannata/slowpoke-node/actions/workflows/codeql.yml/badge.svg"></a>
+<a href="#performance"><img alt="runtime dependencies: 0" src="https://img.shields.io/badge/runtime%20dependencies-0-brightgreen"></a>
 <a href="https://scorecard.dev/viewer/?uri=github.com/christiancannata/slowpoke-node"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/christiancannata/slowpoke-node/badge"></a>
 <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/npm/l/@slowpoke/node"></a>
 </p>
@@ -103,7 +105,8 @@ point at the same line anyway. Everything else is about 0.4 µs per query.
 | **Quiet when idle** | a query outside a request, a job or a command — a pool warming up, a migration — costs one lookup and is not recorded |
 | **Right under load** | the trace lives in `AsyncLocalStorage`: a thousand requests in flight never mix their queries, and there is a test that runs them at once to prove it |
 
-About 800 lines of JavaScript. **No runtime dependency at all.**
+About 800 lines of JavaScript. **No runtime dependency at all.** A test in the suite fails the day that stops being true,
+and another one fails if anything but source and documentation ends up in a published copy.
 
 ## What is sent, and what never is
 

@@ -1,0 +1,33 @@
+name: publish
+
+# On a version tag: publish to npm as this repository, through OpenID Connect, with a provenance
+# attestation. There is no token anywhere - not in a secret, not on a laptop - and npm shows which
+# workflow of which repository published the version.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # this, and nothing else, is what lets it publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+      - name: The suite, before anything leaves
+        run: |
+          npm install --no-audit --no-fund
+          node --test test/*.test.js
+      - name: Publish
+        run: npm publish --access public --provenance
