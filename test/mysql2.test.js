@@ -103,3 +103,74 @@ test('a query through a pool keeps the line that asked for it, and is recorded o
   assert.strictEqual(attr(queries[0], 'code.file.path'), 'test/mysql2.test.js');
   assert.strictEqual(attr(queries[0], 'code.line.number'), String(lineOf(__filename, 'pool')));
 });
+
+/**
+ * A real pool does not answer on the spot: it queues the statement and runs it when a connection
+ * frees up, from whatever context its queue is being drained in - another request, or none. This
+ * fake does the same, draining from a timer started outside any request.
+ */
+function fakePool(queue) {
+  class Connection {
+    query(sql, values, callback) {
+      const args = arguments;
+      for (let i = args.length - 1; i >= 1; i--) {
+        if (typeof args[i] === 'function') {
+          queue.push(() => args[i](null, [], []));
+          return { started: true };
+        }
+      }
+      return new Promise((resolve) => queue.push(() => resolve([[], []])));
+    }
+  }
+  class Pool extends Connection {}
+  return { Pool, Connection };
+}
+
+test('a pool that answers from its own queue still files the query under the request that asked', async (t) => {
+  const queue = [];
+  // Drained outside every request, as a pool drains when a connection frees up.
+  const drain = setInterval(() => { const next = queue.shift(); if (next) next(); }, 1);
+  t.after(() => clearInterval(drain));
+
+  const module = fakePool(queue);
+  slowpoke.mysql2.instrument(module);
+  const { tracer, sender } = install(t);
+  const pool = new module.Pool();
+
+  const trace = tracer.startRequest('GET');
+  await tracer.run(trace, async () => {
+    await new Promise((resolve, reject) => pool.query('SELECT 1', [], (e) => (e ? reject(e) : resolve())));
+    await new Promise((resolve, reject) => pool.query('SELECT 2', [], (e) => (e ? reject(e) : resolve())));
+    tracer.finishRequest(trace, '/orders', '/orders', 200);
+  });
+
+  const [, queries] = sender.onlyTrace();
+  assert.deepStrictEqual(queries.map((q) => attr(q, 'db.query.text')), ['SELECT 1', 'SELECT 2'],
+    'a pooled query must not be lost');
+});
+
+test('a statement issued from inside another statement\'s callback is recorded too', async (t) => {
+  const queue = [];
+  const drain = setInterval(() => { const next = queue.shift(); if (next) next(); }, 1);
+  t.after(() => clearInterval(drain));
+
+  const module = fakePool(queue);
+  slowpoke.mysql2.instrument(module);
+  const { tracer, sender } = install(t);
+  const pool = new module.Pool();
+
+  const trace = tracer.startRequest('GET');
+  await tracer.run(trace, async () => {
+    await new Promise((resolve, reject) => {
+      pool.query('SELECT outer', [], (first) => {
+        if (first) return reject(first);
+        // Callback style: the second statement is asked for from inside the first one's answer.
+        pool.query('SELECT inner', [], (second) => (second ? reject(second) : resolve()));
+      });
+    });
+    tracer.finishRequest(trace, '/orders', '/orders', 200);
+  });
+
+  const [, queries] = sender.onlyTrace();
+  assert.deepStrictEqual(queries.map((q) => attr(q, 'db.query.text')), ['SELECT outer', 'SELECT inner']);
+});

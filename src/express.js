@@ -22,7 +22,7 @@ function middleware() {
       if (finished) return;
       finished = true;
       try {
-        tracer.finishRequest(trace, routeOf(req), req.originalUrl || req.url || '/', res.statusCode || 0);
+        tracer.finishRequest(trace, routeOf(req), req.originalUrl || req.url || '/', res.statusCode || 0, hostOf(req));
       } catch (e) {
         // never let observability break the response
       }
@@ -43,6 +43,17 @@ function routeOf(req) {
   return full || '/';
 }
 
+// The host the request was addressed to, without the port: "shop.example.com". A proxy in front
+// on another machine logs the same requests, and this is what says they are the same.
+function hostOf(req) {
+  const headers = (req && req.headers) || {};
+  const raw = headers[':authority'] || headers.host || '';
+  // "shop.example.com:8443" and "[::1]:3000" both lose the port; the first of a comma-separated
+  // list is the one the request was addressed to.
+  return String(raw).split(',')[0].trim().toLowerCase().replace(/:\d+$/, '');
+}
+
 module.exports = middleware;
 module.exports.middleware = middleware;
 module.exports.routeOf = routeOf;
+module.exports.hostOf = hostOf;

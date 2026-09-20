@@ -25,15 +25,20 @@ function now() {
  */
 function begin(sql, system, skipAbove) {
   const tracer = slowpoke.getTracer();
-  if (tracer === null || current() === null || !sql || silenced.getStore()) return null;
+  const asked = current();
+  if (tracer === null || asked === null || !sql || silenced.getStore()) return null;
   const origin = tracer.origins(sql, skipAbove);
   const started = now();
   let recorded = false;
-  return () => {
+  // The trace travels with the record: by the time a pool runs this statement and calls back,
+  // the context is the one its queue was in, not the request that asked.
+  const record = () => {
     if (recorded) return;
     recorded = true;
-    tracer.recordQuery(sql, now() - started, system, origin);
+    tracer.recordQuery(sql, now() - started, system, origin, asked);
   };
+  record.trace = asked;
+  return record;
 }
 
 /**
@@ -87,11 +92,21 @@ function onEnded(emitter, record) {
   return true;
 }
 
-/** Wraps a driver callback so the query is recorded exactly once, before the caller is resumed. */
+/**
+ * Wraps a driver callback so the query is recorded exactly once, before the caller is resumed.
+ *
+ * The callback is the door back to the application, and what comes through it is the request's
+ * own code: it runs in the request that asked for the statement, and never silenced. A pool calls
+ * back from wherever its queue happened to be drained - another request, or none at all - and
+ * whatever the application does there, another query above all, would otherwise be filed under a
+ * stranger, dropped as an inner layer, or lost for having no request at all.
+ */
 function wrapCallback(callback, record) {
   return function slowpokeCallback(...args) {
     record();
-    return callback.apply(this, args);
+    const resume = () => silenced.exit(() => callback.apply(this, args));
+    const tracer = slowpoke.getTracer();
+    return tracer !== null && record.trace ? tracer.run(record.trace, resume) : resume();
   };
 }
 

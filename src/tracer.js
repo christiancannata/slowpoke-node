@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { AsyncLocalStorage } = require('node:async_hooks');
 
-const VERSION = '0.1.2';
+const VERSION = '0.1.3';
 
 const SERVER = 2;
 const CLIENT = 3;
@@ -51,7 +51,7 @@ class Tracer {
     }
   }
 
-  finishRequest(trace, route, path, status) {
+  finishRequest(trace, route, path, status, host) {
     if (!trace || trace.end !== null) return;
     try {
       trace.end = this.clock();
@@ -65,6 +65,10 @@ class Tracer {
         trace.attributes.push(kv('url.path', '/' + String(path || '').split('?')[0].replace(/^\/+/, '')));
       }
       trace.attributes.push(kv('http.response.status_code', Math.trunc(status)));
+      // The host this request was answered for. With a web server in front on another machine,
+      // it is the only thing that says its access log and this trace are the same requests, so
+      // that nobody counts them twice.
+      if (host) trace.attributes.push(kv('server.address', String(host).toLowerCase()));
       trace.error = status >= 500;
     } catch (e) {
       trace.end = trace.end || this.clock();
@@ -122,10 +126,15 @@ class Tracer {
     return found;
   }
 
-  /** Called right after a statement ran, from the code that ran it. */
-  recordQuery(sql, seconds, system, origin) {
-    const trace = current();
-    if (trace === null) return; // outside a request, a job or a command: a pool warming up, a migration
+  /**
+   * Called right after a statement ran. The trace is the one of whoever asked for it, captured
+   * when the application called: a pool finishes the statement in a callback of its own, in
+   * whatever context it was queued from, and looking the trace up here would file the query
+   * under somebody else's request or drop it.
+   */
+  recordQuery(sql, seconds, system, origin, asked) {
+    const trace = asked || current();
+    if (!trace) return; // outside a request, a job or a command: a pool warming up, a migration
     try {
       if (trace.queries.length >= this.maxQueries) {
         trace.dropped += 1;

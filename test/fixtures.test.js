@@ -28,13 +28,15 @@ function scenarios() {
           ['src/models/order.js', 88]);
       }
       clock.now += 0.01;
-      tracer.finishRequest(trace, '/orders', '/orders', 200);
+      // Written as a browser sends it: the host is normalised, so a web server logging
+      // "shop.example.com" on another machine is recognised as the same requests.
+      tracer.finishRequest(trace, '/orders', '/orders', 200, 'Shop.Example.com:8443');
     });
     out.push({
       name: 'Express + pg: an N+1 in a loop',
       payload: JSON.parse(sender.payloads[0]),
       expect: {
-        route: 'GET /orders', status: 200, requests: 1, source: 'otlp:shop',
+        route: 'GET /orders', status: 200, requests: 1, source: 'otlp:shop', site: 'shop.example.com',
         queries: [
           { statement: 'SELECT id, customer_id FROM orders WHERE status = $1 ORDER BY created_at DESC LIMIT 25',
             n: 1, origin: 'src/routes/orders.js:18', n_plus_one: false },

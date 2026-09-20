@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.3 - 2026-09-20
+
+- **Queries run through a connection pool were being lost - nine out of ten of them.** A pool does
+  not answer on the spot: it queues the statement and calls back when a connection frees up, from
+  whatever context its queue was drained in. The query was then filed by looking up "the request
+  running now", which by then was another request or none, so it was dropped. The trace is now
+  taken when the application asks and travels with the statement, and the driver's callback - which
+  is the application's own code - is resumed inside the request that asked for it, so a statement
+  issued from inside another one's callback is recorded too. Anything using `mysql2` (its promise
+  wrapper included, so every ORM on top of it) or `pg` with callbacks was affected; the lab caught
+  it with 161 requests reporting 0 queries.
+- The package says which host it answered for (`server.address`). With a web server in front of the
+  application on **another machine** - an ingress, a load balancer, containers elsewhere - no agent
+  sees both the access log and the traces, so until now the same requests were counted twice: in the
+  traffic, in the speed index and in the technical debt built from them. The host is what links the
+  two sides; on one machine the agent already paired single requests and still does.
+
 ## 0.1.2 - 2026-09-19
 
 - Releases come from GitHub Actions through OpenID Connect: no token in a secret, none on a laptop,
