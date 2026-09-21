@@ -101,7 +101,7 @@ point at the same line anyway. Everything else is about 0.4 µs per query.
 | **Sent after the response** | the trace leaves on `finish`, when the client already has the page. Jobs and commands send as soon as they are done |
 | **Never waits** | the socket is unref'd and has a hard time budget (`SLOWPOKE_TIMEOUT`, 0.1 s), with a bounded number of requests in flight: past that a trace is dropped, never queued. A missing, slow or broken agent costs one trace, never a request — and never keeps your process alive |
 | **Never copies your data** | the stack is read for file and line only: no argument, no local, ever |
-| **Bounded** | 500 queries described per request at most, the rest counted; statements over 10 000 characters cut; bounded maps everywhere |
+| **Bounded** | 500 queries and 200 outbound calls described per request at most, the rest counted; statements over 10 000 characters cut; bounded maps everywhere |
 | **Quiet when idle** | a query outside a request, a job or a command — a pool warming up, a migration — costs one lookup and is not recorded |
 | **Right under load** | the trace lives in `AsyncLocalStorage`: a thousand requests in flight never mix their queries, and there is a test that runs them at once to prove it |
 
@@ -118,7 +118,17 @@ Sent only to the agent on your machine or private network:
 - **per command** — the command name, how long it took, whether it threw;
 - **per query** — the SQL **with placeholders** exactly as the driver received it, the database engine,
   the real duration, and the first line of your own code on the stack, outside `node_modules`, outside
-  Node's internals and outside this package.
+  Node's internals and outside this package;
+- **per outbound HTTP call** made with `fetch`, `undici`, `http` or `https` (and so with axios, got,
+  node-fetch and the SDKs built on them) — the method, the remote **host** (and its port when it is not
+  80/443), the response status, how long the call took, whether it failed (no connection, an abort, a
+  5xx), and the line of your code that made it. Never the URL path, the query string, headers or bodies:
+  they carry tokens and personal data. The call is caught where it starts — `globalThis.fetch`,
+  `http.request`/`get` and `https.request`/`get` are wrapped, ESM imports included — and
+  `diagnostics_channel` says how it ended; a fetch is one call, redirects included, never also counted
+  as the undici request under it. The line is the first frame of your code at the moment of the call:
+  a library that makes the request a few awaits later (axios) may leave it empty. The package's own
+  delivery to the agent is never traced.
 
 **Never sent** — parameter values, request bodies, headers, cookies, session, the user, error messages.
 If you build SQL with literal values yourself, they are part of the statement, and the agent redacts them
@@ -135,6 +145,8 @@ Everything has a default that works. Nothing has to be set.
 | `SLOWPOKE_TIMEOUT` | `0.1` | seconds given to the agent, connect and write together |
 | `SLOWPOKE_SERVICE` | the code root folder's name | the name of this application in Slowpoke |
 | `SLOWPOKE_MAX_QUERIES` | `500` | queries described per request, job or command; the rest are counted |
+| `SLOWPOKE_HTTP_CLIENT` | `true` | record outbound calls (`fetch`, `undici`, `http`, `https`); `false` does not even wrap them |
+| `SLOWPOKE_MAX_HTTP_CALLS` | `200` | outbound calls described per request, job or command; the rest are counted |
 | `SLOWPOKE_MAX_SQL_LENGTH` | `10000` | longer statements are cut |
 | `SLOWPOKE_BACKTRACE_LIMIT` | `60` | stack frames inspected to find your line |
 | `SLOWPOKE_CODE_ROOT` | the working directory | file paths are sent relative to it |

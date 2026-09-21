@@ -132,6 +132,45 @@ function scenarios() {
     });
   }
 
+  {
+    const { tracer, sender, clock } = make();
+    let at = null;
+    tracer.origin = { find: () => at }; // the line is fixed here, as the queries' origins are
+    const trace = tracer.startRequest('POST');
+    tracer.run(trace, () => {
+      clock.now += 0.005;
+      tracer.recordQuery('SELECT id, total FROM carts WHERE id = $1', 0.002, 'postgresql', ['src/routes/checkout.js', 27]);
+      clock.now += 0.001;
+      at = ['src/services/stripe.js', 88];
+      const stripe = tracer.startHttpCall('post', 'https://api.stripe.com/v1/payment_intents?expand=customer');
+      clock.now += 0.3;
+      tracer.httpResponse(stripe, 200);
+      clock.now += 0.12;
+      tracer.httpEnd(stripe);
+      clock.now += 0.002;
+      at = null; // a call made from library code only
+      const partner = tracer.startHttpCall('GET', 'http://Partner.Example.com:8080/stock?sku=A1');
+      clock.now += 1.5;
+      tracer.httpFail(partner);
+      clock.now += 0.003;
+      tracer.finishRequest(trace, '/checkout', '/checkout', 200);
+    });
+    out.push({
+      name: 'request with outbound calls: one to Stripe, one failed to a partner',
+      payload: JSON.parse(sender.payloads[0]),
+      expect: {
+        route: 'POST /checkout', status: 200, requests: 1, source: 'otlp:shop',
+        queries: [
+          { statement: 'SELECT id, total FROM carts WHERE id = $1', n: 1, origin: 'src/routes/checkout.js:27', n_plus_one: false },
+        ],
+        outbound: [
+          { host: 'api.stripe.com', n: 1, errors: 0, origin: 'src/services/stripe.js:88' },
+          { host: 'partner.example.com:8080', n: 1, errors: 1, origin: '' },
+        ],
+      },
+    });
+  }
+
   return out;
 }
 

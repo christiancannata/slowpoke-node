@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4 - 2026-09-21
+
+- Outbound HTTP calls made with `fetch`, `undici`, `http` or `https` during a request, a job or a
+  command are now part of its trace: one span per call with the method, the remote host (the port only
+  when it is not the scheme's default), the status, the time spent waiting and the line of your code
+  that made it, so Slowpoke can say "this endpoint waits 8 s on api.stripe.com". A failed connection, an
+  abort and a 5xx answer are errors. The URL path, the query string, headers and bodies are never sent.
+  A fetch is counted once, redirects included. `SLOWPOKE_HTTP_CLIENT=false` (or
+  `configure({ httpClient: false })`) turns it off and `SLOWPOKE_MAX_HTTP_CALLS` (200) bounds the calls
+  described per trace, the rest are counted (`slowpoke.dropped_http_calls`).
+
 ## 0.1.3 - 2026-09-20
 
 - **Queries run through a connection pool were being lost - nine out of ten of them.** A pool does

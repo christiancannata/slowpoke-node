@@ -27,6 +27,8 @@ function fromEnv(env = process.env) {
     backtraceLimit: number(env.SLOWPOKE_BACKTRACE_LIMIT, 60, 1),
     codeRoot: (env.SLOWPOKE_CODE_ROOT || '').trim() || null,
     maxInFlight: number(env.SLOWPOKE_MAX_IN_FLIGHT, 32, 1),
+    httpClient: bool(env.SLOWPOKE_HTTP_CLIENT, true),
+    maxHttpCalls: number(env.SLOWPOKE_MAX_HTTP_CALLS, 200, 0),
   };
 }
 

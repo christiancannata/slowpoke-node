@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { AsyncLocalStorage } = require('node:async_hooks');
 
-const VERSION = '0.1.3';
+const VERSION = '0.1.4';
 
 const SERVER = 2;
 const CLIENT = 3;
@@ -21,13 +21,15 @@ function current() {
 /**
  * Collects one trace per request, job or command and encodes it for the agent: a SERVER (or
  * CONSUMER) span and one CLIENT span per query, with the SQL as the driver received it
- * (placeholders, never parameter values) and the application line that ran it.
+ * (placeholders, never parameter values) and the application line that ran it, plus one CLIENT
+ * span per outbound HTTP call, which names the remote host and nothing else of the URL.
  *
  * Every public method swallows its own errors: observability must never break the application.
  */
 class Tracer {
   constructor({ origin, submit, service = 'node', version = VERSION, maxQueries = 500,
-    maxSqlLength = 10000, clock = () => Date.now() / 1000, ids = randomId } = {}) {
+    maxSqlLength = 10000, clock = () => Date.now() / 1000, ids = randomId, httpClient = true,
+    maxHttpCalls = 200, agentEndpoint = null } = {}) {
     this.origin = origin;
     this.submit = submit;
     this.service = service;
@@ -36,6 +38,10 @@ class Tracer {
     this.maxSqlLength = Math.max(1, maxSqlLength);
     this.clock = clock;
     this.ids = ids;
+    this.httpClient = Boolean(httpClient);
+    this.maxHttpCalls = Math.max(0, maxHttpCalls);
+    const agent = agentEndpoint ? target(agentEndpoint) : null;
+    this.agent = agent ? `${agent.host}:${agent.port}` : null;
   }
 
   // ------------------------------------------------------------------ requests
@@ -163,6 +169,55 @@ class Tracer {
     }
   }
 
+  // ------------------------------------------------------------------ outbound HTTP calls
+
+  /**
+   * An outbound call is leaving, from the code that makes it: the line to blame is on the stack
+   * now. Returns the handle the other http* methods take, or null when there is nothing to record.
+   * Only the host of the URL is kept.
+   */
+  startHttpCall(method, url, skipAbove) {
+    const trace = current();
+    if (trace === null) return null; // same rule as queries: outside a trace nothing is recorded
+    try {
+      const where = target(url);
+      if (where === null || `${where.host}:${where.port}` === this.agent) return null;
+      if (trace.http.length >= this.maxHttpCalls) {
+        trace.droppedHttp += 1;
+        return null;
+      }
+      const call = {
+        method: String(method || 'GET').toUpperCase(), host: where.host, port: where.custom ? where.port : null,
+        start: this.clock(), end: null, status: null, error: false,
+        origin: this.origin ? this.origin.find(skipAbove || this.startHttpCall) : null, trace,
+      };
+      trace.http.push(call);
+      return call;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** The response headers arrived. The call may still be reading its body: httpEnd moves the end. */
+  httpResponse(call, status) {
+    if (!open(call)) return;
+    call.status = Number.isInteger(status) && status > 0 ? status : null;
+    call.error = call.error || (call.status !== null && call.status >= 500);
+    call.end = this.clock();
+  }
+
+  /** The body was read to the end. */
+  httpEnd(call) {
+    if (open(call)) call.end = this.clock();
+  }
+
+  /** The call failed: no connection, a timeout, an abort, a body cut short. */
+  httpFail(call) {
+    if (!open(call)) return;
+    call.error = true;
+    call.end = this.clock();
+  }
+
   // ------------------------------------------------------------------ plumbing
 
   run(trace, fn) {
@@ -173,7 +228,7 @@ class Tracer {
     return {
       kind, name, start: this.clock(), end: null, error: false,
       traceId: this.ids(16), spanId: this.ids(8),
-      attributes: [], queries: [], dropped: 0, method: null, origins: new Map(),
+      attributes: [], queries: [], dropped: 0, method: null, origins: new Map(), http: [], droppedHttp: 0,
     };
   }
 
@@ -196,26 +251,20 @@ class Tracer {
       attributes: trace.attributes.slice(),
     };
     if (trace.dropped > 0) root.attributes.push(kv('slowpoke.dropped_queries', trace.dropped));
+    if (trace.droppedHttp > 0) root.attributes.push(kv('slowpoke.dropped_http_calls', trace.droppedHttp));
     if (trace.error) root.status = { code: 2 };
     const spans = [root];
+    for (const call of trace.http) {
+      const attributes = [kv('http.request.method', call.method), kv('server.address', call.host)];
+      if (call.port !== null) attributes.push(kv('server.port', call.port));
+      if (call.status !== null) attributes.push(kv('http.response.status_code', call.status));
+      // A call still open when its trace ended is closed there, as a failure.
+      spans.push(this.clientSpan(trace, `${call.method} ${call.host}`, call.start,
+        call.end === null ? trace.end : call.end, attributes, call.origin, call.error || call.end === null));
+    }
     for (const query of trace.queries) {
       const attributes = [kv('db.system.name', query.system), kv('db.query.text', query.sql)];
-      if (query.origin) {
-        attributes.push(kv('code.file.path', query.origin[0]));
-        if (query.origin[1] !== null && query.origin[1] !== undefined) {
-          attributes.push(kv('code.line.number', Math.trunc(query.origin[1])));
-        }
-      }
-      spans.push({
-        traceId: trace.traceId,
-        spanId: this.ids(8),
-        parentSpanId: trace.spanId,
-        name: firstWord(query.sql),
-        kind: CLIENT,
-        startTimeUnixNano: nanos(query.start),
-        endTimeUnixNano: nanos(query.end),
-        attributes,
-      });
+      spans.push(this.clientSpan(trace, firstWord(query.sql), query.start, query.end, attributes, query.origin, false));
     }
     return {
       resourceSpans: [{
@@ -232,9 +281,60 @@ class Tracer {
     };
   }
 
+  clientSpan(trace, name, start, end, attributes, origin, error) {
+    if (origin) {
+      attributes.push(kv('code.file.path', origin[0]));
+      if (origin[1] !== null && origin[1] !== undefined) attributes.push(kv('code.line.number', Math.trunc(origin[1])));
+    }
+    const span = {
+      traceId: trace.traceId,
+      spanId: this.ids(8),
+      parentSpanId: trace.spanId,
+      name,
+      kind: CLIENT,
+      startTimeUnixNano: nanos(start),
+      endTimeUnixNano: nanos(end),
+      attributes,
+    };
+    if (error) span.status = { code: 2 };
+    return span;
+  }
+
   encodeJson(trace) {
     return JSON.stringify(this.encode(trace));
   }
+}
+
+function open(call) {
+  return Boolean(call) && call.trace.end === null;
+}
+
+const DEFAULT_PORTS = { 'http:': 80, 'https:': 443, 'ws:': 80, 'wss:': 443 };
+
+/**
+ * { host, port, custom } of a URL (a string, a URL object, or the options http.request takes), or
+ * null. The path, the query string and any credentials are never looked at again.
+ */
+function target(url) {
+  if (url === null || url === undefined) return null;
+  let protocol;
+  let host;
+  let port;
+  if (typeof url === 'string' || url instanceof URL) {
+    const parsed = typeof url === 'string' ? new URL(url) : url;
+    protocol = parsed.protocol;
+    host = parsed.hostname;
+    port = parsed.port;
+  } else {
+    protocol = url.protocol || 'http:';
+    host = url.hostname || (url.host ? String(url.host).replace(/:\d+$/, '') : 'localhost');
+    port = url.port;
+  }
+  host = String(host || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return null;
+  const fallback = DEFAULT_PORTS[protocol] || 80;
+  const number = port === undefined || port === null || port === '' ? fallback : Number(port);
+  return { host, port: number, custom: number !== fallback };
 }
 
 function firstWord(sql) {
@@ -258,4 +358,4 @@ function randomId(bytes) {
   return crypto.randomBytes(bytes).toString('hex');
 }
 
-module.exports = { Tracer, VERSION, SERVER, CLIENT, CONSUMER, current, storage, nanos, kv };
+module.exports = { Tracer, VERSION, SERVER, CLIENT, CONSUMER, current, storage, nanos, kv, target };

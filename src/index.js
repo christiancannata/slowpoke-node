@@ -11,6 +11,7 @@ const path = require('node:path');
 
 const { fromEnv } = require('./config');
 const { OriginFinder } = require('./origin');
+const { install: traceHttpClients } = require('./http');
 const { HttpSender } = require('./sender');
 const { Tracer, VERSION, current } = require('./tracer');
 
@@ -18,7 +19,8 @@ const state = { built: false, tracer: null, explicit: {}, defaults: {}, sender: 
 
 /**
  * Builds the tracer now from the SLOWPOKE_* variables, with these options on top: any setting
- * (enabled, endpoint, timeout, service, maxQueries, maxSqlLength, backtraceLimit, codeRoot),
+ * (enabled, endpoint, timeout, service, maxQueries, maxSqlLength, backtraceLimit, codeRoot,
+ * httpClient, maxHttpCalls),
  * plus `sender` (an object with send(string)) for tests. Returns null when Slowpoke is disabled.
  */
 function configure(overrides = {}) {
@@ -47,10 +49,16 @@ function getTracer() {
       service: config.service || path.basename(codeRoot) || 'node',
       maxQueries: config.maxQueries,
       maxSqlLength: config.maxSqlLength,
+      httpClient: config.httpClient,
+      maxHttpCalls: config.maxHttpCalls,
+      agentEndpoint: config.endpoint,
     });
     tracer.submit = (trace) => sender.send(tracer.encodeJson(trace));
     state.sender = sender;
     state.tracer = tracer;
+    // fetch, undici, http and https: the wrappers ask the tracer on every call, so turning this
+    // off later (a new configure) needs no unpatching.
+    if (config.httpClient) traceHttpClients();
     return tracer;
   } catch (e) {
     return null; // a broken configuration disables Slowpoke, it never stops the app from booting
