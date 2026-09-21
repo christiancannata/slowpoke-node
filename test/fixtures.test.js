@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
 
+const { jobName } = require('../src/bullmq');
 const { make } = require('./helpers');
 
 // spec/node_otlp_fixtures.json holds payloads exactly as this package sends them, with what the
@@ -104,6 +105,31 @@ function scenarios() {
           { statement: 'SELECT * FROM invoices WHERE sent_at IS NULL', n: 1, origin: 'src/jobs/invoices.js:31',
             n_plus_one: false },
           { statement: 'UPDATE invoices SET sent_at = now() WHERE id = $1', n: 1, origin: '', n_plus_one: false },
+        ],
+      },
+    });
+  }
+
+  {
+    // Bull 3 names a job added without a name "__default__": the queue names the work instead.
+    const { tracer, sender, clock } = make();
+    const job = tracer.startJob(jobName({ name: '__default__', id: '981' }, 'thumbnails'), 'thumbnails');
+    tracer.run(job, () => {
+      clock.now += 0.2;
+      tracer.recordQuery('UPDATE images SET width = $1 WHERE id = $2', 0.004, 'postgresql',
+        ['src/jobs/thumbnails.js', 18]);
+      clock.now += 0.01;
+      tracer.finishJob(job, false);
+    });
+    out.push({
+      name: 'Bull job without a name: named after its queue, not "__default__" nor its id',
+      payload: JSON.parse(sender.payloads[0]),
+      expect: {
+        route: 'job thumbnails', status: 0, requests: 1, source: '',
+        job: { kind: 'job', name: 'thumbnails', runs: 1, failed: 0 },
+        queries: [
+          { statement: 'UPDATE images SET width = $1 WHERE id = $2', n: 1, origin: 'src/jobs/thumbnails.js:18',
+            n_plus_one: false },
         ],
       },
     });

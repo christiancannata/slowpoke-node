@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5 - 2026-09-21
+
+- A BullMQ (or Bull 3) job without a real name is named after its queue on the Jobs page. Bull 3 calls
+  a job added without a name `__default__`, and an empty name fell back to the job id, which is
+  different on every run (`repeat:<key>:<timestamp>` for a repeatable job): each run became a row of
+  its own. The id is never used as a name any more.
+
 ## 0.1.4 - 2026-09-21
 
 - Outbound HTTP calls made with `fetch`, `undici`, `http` or `https` during a request, a job or a

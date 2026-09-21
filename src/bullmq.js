@@ -12,10 +12,20 @@ const slowpoke = require('./index');
  */
 function processor(fn) {
   return function slowpokeProcessor(job, token) {
-    const name = (job && (job.name || job.id)) || 'job';
     const queue = job && (job.queueName || (job.queue && job.queue.name));
-    return slowpoke.job(name, () => fn(job, token), { queue });
+    return slowpoke.job(jobName(job, queue), () => fn(job, token), { queue });
   };
 }
 
-module.exports = { processor };
+/**
+ * The job's name, or its queue's when it has none: Bull 3 calls a job added without a name
+ * "__default__". Never the id, which is different for every run (a repeatable job's is
+ * "repeat:<key>:<timestamp>"): each run would become a Jobs page row of its own.
+ */
+function jobName(job, queue) {
+  const name = job && typeof job.name === 'string' ? job.name.trim() : '';
+  if (name !== '' && name !== '__default__') return name;
+  return (typeof queue === 'string' && queue.trim()) || 'job';
+}
+
+module.exports = { processor, jobName };

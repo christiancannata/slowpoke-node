@@ -58,6 +58,20 @@ test('a BullMQ processor is one trace per job, named after it', async (t) => {
   assert.strictEqual(queries.length, 1);
 });
 
+test('a job without a real name is named after its queue, never after its id', async (t) => {
+  // Bull 3 names a job added without a name "__default__"; an empty name would fall back to the id,
+  // one Jobs page row per run ("repeat:3f1c...:1760000000000"). The queue is the work's name then.
+  const { sender } = install(t);
+  const processor = slowpoke.bullmq.processor(async () => 1);
+
+  await processor({ name: '__default__', id: '981', queue: { name: 'thumbnails' } });
+  await processor({ name: '', id: 'repeat:3f1c:1760000000000', queueName: 'reports' });
+  await processor({ id: '7' });
+
+  const names = sender.payloads.map((p) => JSON.parse(p).resourceSpans[0].scopeSpans[0].spans[0].name);
+  assert.deepStrictEqual(names, ['thumbnails', 'reports', 'job']);
+});
+
 test('with Slowpoke disabled the helpers just run the work', async (t) => {
   const { sender } = install(t, { enabled: false });
   assert.strictEqual(await slowpoke.job('x', async () => 1), 1);
