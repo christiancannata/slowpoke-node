@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 - 2026-10-26
+
+- No change to the package. The Fastify tests no longer use `inject()`: its `light-my-request`
+  dependency started requiring an ES module that Node 18 cannot load, so the suite failed on Node 18
+  while the package itself worked. The tests now call the application over a real socket, as an
+  application's clients do.
+
 ## 0.1.5 - 2026-09-21
 
 - A BullMQ (or Bull 3) job without a real name is named after its queue on the Jobs page. Bull 3 calls

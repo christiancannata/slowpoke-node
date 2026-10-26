@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { AsyncLocalStorage } = require('node:async_hooks');
 
-const VERSION = '0.1.5';
+const VERSION = '0.1.6';
 
 const SERVER = 2;
 const CLIENT = 3;

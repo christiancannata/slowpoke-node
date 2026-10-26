@@ -19,10 +19,14 @@ async function app(tracer) {
   return application;
 }
 
+// A real socket, not inject(): inject loads light-my-request, whose own dependencies stopped loading on
+// Node 18 (6.8.0 requires an ES module). An application never calls inject, so the test should not either.
 async function request(application, path) {
-  const response = await application.inject({ method: 'GET', url: path });
-  await application.close(); // onResponse has run by the time inject resolves
-  return response.statusCode;
+  await application.listen({ port: 0, host: '127.0.0.1' });
+  const response = await fetch(`http://127.0.0.1:${application.server.address().port}${path}`);
+  await response.arrayBuffer();
+  await application.close(); // waits for the open request, onResponse included
+  return response.status;
 }
 
 test('a request is one trace with the route template and the query origin', async (t) => {
